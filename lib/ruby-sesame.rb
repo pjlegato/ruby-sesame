@@ -55,6 +55,11 @@ module RubySesame
       @repositories || query_repositories
     end
 
+    # Get a Repository by id. Returns the first repository if there is more than one.
+    def repository(id)
+      self.repositories.select {|r| r.id == id}.first
+    end
+
     def query_repositories
       easy = Curl::Easy.new
       easy.headers["Accept"] = RESULT_TYPES[:JSON]
@@ -88,18 +93,26 @@ module RubySesame
     # be used to bind variables outside the actual query. Keys are
     # variable names and values are N-Triples encoded RDF values.
     #
-    def query(query, result_type=RESULT_TYPES[:JSON], method=:get, query_language="sparql", infer=true, variable_bindings=nil)
-      easy = Curl::Easy.new
-      easy.headers["Accept"] = result_type
+    def query(query, options={})
+      options = {
+        :result_type => RESULT_TYPES[:JSON],
+        :method => :get,
+        :query_language => "sparql",
+        :infer => true,
+        :variable_bindings => nil
+      }.merge(options)
 
-      if method == :get
+      easy = Curl::Easy.new
+      easy.headers["Accept"] = options[:result_type]
+
+      if options[:method] == :get
         easy.url = (self.uri + "?" +
                     "query=#{ easy.escape(query) }&"+
-                    "queryLn=#{ easy.escape(query_language) }&" +
-                    (!infer ? "infer=false&" : "" ) +
-                    if variable_bindings
-                      variable_bindings.keys.map {|name|
-                        "$<#{ easy.escape(name) }>=#{ easy.escape(variable_bindings[name]) }"
+                    "queryLn=#{ easy.escape(options[:query_language]) }&" +
+                    (!options[:infer] ? "infer=false&" : "" ) +
+                    if options[:variable_bindings]
+                      options[:variable_bindings].keys.map {|name|
+                        "$<#{ easy.escape(name) }>=#{ easy.escape(options[:variable_bindings][name]) }"
                       }.join("&")
                     else
                       ""
@@ -110,8 +123,19 @@ module RubySesame
         easy.http_get
 
       else # POST.
-        easy.url = self.server.url + self.uri
-        raise Exception.new("Not implemented yet")
+        easy.url = self.uri
+
+        fields = ["query=#{ easy.escape(query) }",
+                  "queryLn=#{ easy.escape(options[:query_language]) }"
+                 ]
+
+        field.push("infer=false") unless options[:infer]
+
+        options[:variable_bindings].keys.map {|name|
+          field.push("$<#{ easy.escape(name) }>=#{ easy.escape(options[:variable_bindings][name]) }")
+        } if options[:variable_bindings]
+
+        easy.http_post(fields)
       end
 
       easy.body_str
