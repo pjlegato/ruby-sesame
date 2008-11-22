@@ -141,6 +141,38 @@ module RubySesame
       easy.body_str
     end # query
 
+    # Perform REST operations on statements in the repository. (See also the convenience method wrappers.)
+    #
+    # method is one of GET, PUT, DELETE, or POST.
+    #
+    # N.B. if unqualified with 1 or more options, this will return/operate on _all_ statements in the repository.
+    #
+    # Options:
+    #     * 'subj' (optional): Restricts a GET or DELETE operation to statements with the specified N-Triples encoded resource as subject.
+    #     * 'pred' (optional): Restricts a GET or DELETE operation to statements with the specified N-Triples encoded URI as predicate.
+    #     * 'obj' (optional): Restricts a GET or DELETE operation to statements with the specified N-Triples encoded value as object.
+    #
+    #     * 'context' (optional): If specified, restricts the
+    #       operation to one or more specific contexts in the
+    #       repository. The value of this parameter is either an
+    #       N-Triples encoded URI or bnode ID, or the special value
+    #       'null' which represents all context-less statements. If
+    #       multiple 'context' parameters are specified as an Array, the request
+    #       will operate on the union of all specified contexts. The
+    #       operation is executed on all statements that are in the
+    #       repository if no context is specified.
+    #
+    #     * 'infer' (optional): Boolean; specifies whether inferred statements
+    #       should be included in the result of GET requests. Inferred
+    #       statements are included by default.
+    #
+    #     * 'baseURI' (optional): Specifies the base URI to resolve
+    #       any relative URIs found in uploaded data against. This
+    #       parameter only applies to the PUT and POST method.
+    #
+    def statements(method, options={})
+      raise Exception.new("Not implemented yet.")
+    end
 
   end # class Repository
 end
