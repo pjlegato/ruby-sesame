@@ -34,4 +34,12 @@ shared_examples_for "shared RubySesame specs" do
     server.url.should == "http://foo.bar:987/"
   end
 
+  it "should be able to make POST parameters correectly" do
+    RubySesame::Repository.post_parameterize(:foo => "bar", :baz => "asdf:foo").sort.should == ["baz=asdf%3Afoo", "foo=bar"]
+  end
+
+  it "should be able to make GET parameters correectly" do
+    RubySesame::Repository.get_parameterize(:foo => "bar", :baz => "asdf:foo").split("&").sort.should == ["baz=asdf%3Afoo", "foo=bar"]
+  end
+
 end

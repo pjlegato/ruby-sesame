@@ -21,9 +21,13 @@
 require 'curb'
 require 'json'
 
+# Curb is faster, but doesn't do DELETE or PUT
+require 'net/http'
+require 'uri'
+
 module RubySesame
   ## MIME types for result format to be sent by server.
-  RESULT_TYPES = {
+  DATA_TYPES = {
     ## MIME types for variable binding formats
     :XML => "application/sparql-results+xml",
     :JSON => "application/sparql-results+json",
@@ -82,7 +86,7 @@ module RubySesame
 
     def query_repositories
       easy = Curl::Easy.new
-      easy.headers["Accept"] = RESULT_TYPES[:JSON]
+      easy.headers["Accept"] = DATA_TYPES[:JSON]
       easy.url = @url + "repositories"
       easy.http_get
       @repositories = JSON.parse(easy.body_str)["results"]["bindings"].map{|x| Repository.new(self, x) }
@@ -109,17 +113,21 @@ module RubySesame
     # binding formats for tuple queries, and the MIME types of
     # supported boolean result formats for boolean queries."
     #
-    # variable_bindings should be nil or a Hash. If present, it will
-    # be used to bind variables outside the actual query. Keys are
-    # variable names and values are N-Triples encoded RDF values.
+    # Options:
     #
+    # * :result_type - from DATA_TYPES
+    # * :method - :get or :post
+    # * :query_language - "sparql", "serql", or any other query language your Sesame server supports.
+    # * :infer => true or false. Defaults to true (serverside) if not specified.
+    # * :variable_bindings - if given, should be a Hash. If present, it will
+    #    be used to bind variables outside the actual query. Keys are
+    #    variable names and values are N-Triples encoded RDF values.
+
     def query(query, options={})
       options = {
-        :result_type => RESULT_TYPES[:JSON],
+        :result_type => DATA_TYPES[:JSON],
         :method => :get,
         :query_language => "sparql",
-        :infer => true,
-        :variable_bindings => nil
       }.merge(options)
 
       easy = Curl::Easy.new
@@ -149,7 +157,7 @@ module RubySesame
                   "queryLn=#{ easy.escape(options[:query_language]) }"
                  ]
 
-        field.push("infer=false") unless options[:infer]
+        fields.push("infer=false") unless options[:infer]
 
         options[:variable_bindings].keys.map {|name|
           field.push("$<#{ easy.escape(name) }>=#{ easy.escape(options[:variable_bindings][name]) }")
@@ -161,16 +169,18 @@ module RubySesame
       easy.body_str
     end # query
 
-    # Perform REST operations on statements in the repository. (See also the convenience method wrappers.)
     #
-    # method is one of GET, PUT, DELETE, or POST.
+    # Returns a list of statements from the repository (i.e. performs the REST GET operation on statements in the repository.)
     #
-    # N.B. if unqualified with 1 or more options, this will return/operate on _all_ statements in the repository.
+    # N.B. if unqualified with 1 or more options, this will return _all_ statements in the repository.
     #
     # Options:
-    #     * 'subj' (optional): Restricts a GET or DELETE operation to statements with the specified N-Triples encoded resource as subject.
-    #     * 'pred' (optional): Restricts a GET or DELETE operation to statements with the specified N-Triples encoded URI as predicate.
-    #     * 'obj' (optional): Restricts a GET or DELETE operation to statements with the specified N-Triples encoded value as object.
+    #
+    #     * result_type is the desired MIME type for results (see the DATA_TYPES constant.) Defaults to :Turtle.
+    #
+    #     * 'subj' (optional): Restricts the GET to statements with the specified N-Triples encoded resource as subject.
+    #     * 'pred' (optional): Restricts the GET to statements with the specified N-Triples encoded URI as predicate.
+    #     * 'obj' (optional): Restricts the GET to statements with the specified N-Triples encoded value as object.
     #
     #     * 'context' (optional): If specified, restricts the
     #       operation to one or more specific contexts in the
@@ -186,13 +196,148 @@ module RubySesame
     #       should be included in the result of GET requests. Inferred
     #       statements are included by default.
     #
-    #     * 'baseURI' (optional): Specifies the base URI to resolve
-    #       any relative URIs found in uploaded data against. This
-    #       parameter only applies to the PUT and POST method.
+    def get_statements(options={})
+      options = {:result_type => DATA_TYPES[:Turtle]}.merge(options)
+      easy = Curl::Easy.new
+      easy.headers["Accept"] = options[:result_type]
+
+      url = self.uri + "/statements?" + self.class.get_parameterize(options.reject{|k,v|
+                                                                      ![:subj, :pred, :obj, :context, :infer].include?(k)
+                                                                    })
+      easy.url = url
+      easy.http_get
+
+       easy.body_str
+    end # get_statements
+
+    # Delete one or more statements from the repository. Takes the same arguments as get_statements.
     #
-    def statements(method, options={})
-      raise Exception.new("Not implemented yet.")
+    # If you do not set one of subj, pred, or obj in your options, it will delete ALL statements from the repository.
+    # This is ordinarily not allowed. Set safety=false to delete all statements.
+    #
+    def delete_statements!(options={}, safety=true)
+
+      unless !safety || options.keys.select {|x| [:subj, :pred, :obj].include?(x) }.size > 0
+        raise Exception.new("You asked to delete all statements in the repository. Either give a subj/pred/obj qualifier, or set safety=false")
+      end
+
+      # We have to use net/http, because curb has not yet implemented DELETE as of this writing.
+
+      uri = URI.parse(self.uri + "/statements?" + self.class.get_parameterize(options.reject{|k,v|
+                                                                                ![:subj, :pred, :obj, :context, :infer].include?(k)
+                                                                              }))
+      http = Net::HTTP.start(uri.host, uri.port)
+      http.delete(uri.path)
+    end # delete_statements!
+
+    # Convenience method; deletes all data from the repository.
+    def delete_all_statements!
+      delete_statements!({}, false)
     end
+
+    # Returns the contexts available in the repository, unprocessed.
+    # Results are in JSON by default, though XML and binary are also available.
+    def raw_contexts(result_format="application/sparql-results+json")
+      easy = Curl::Easy.new
+      easy.headers["Accept"] = result_format
+
+      easy.url = self.uri + "/contexts"
+      easy.http_get
+      easy.body_str
+    end
+
+    # Returns an Array of Strings, where each is the id of a context available on the server.
+    def contexts
+      JSON.parse(raw_contexts())["results"]["bindings"].map{|x| x["contextID"]["value"] }
+    end
+
+    # Return the namespaces available in the repository, raw and unprocessed.
+    # Results are in JSON by default, though XML and binary are also available.
+    def raw_namespaces(result_format="application/sparql-results+json")
+      easy = Curl::Easy.new
+      easy.headers["Accept"] = result_format
+
+      easy.url = self.uri + "/namespaces"
+      easy.http_get
+      easy.body_str
+    end
+
+    # Returns a Hash. Keys are the prefixes, and the values are the corresponding namespaces.
+    def namespaces
+      ns = {}
+
+      JSON.parse(raw_namespaces)["results"]["bindings"].each {|x|
+        ns[x["prefix"]["value"]] = x["namespace"]["value"]
+      }
+      ns
+    end
+
+    # Gets the namespace for the given prefix.
+    # Returns nil if not found.
+    def namespace(prefix)
+      easy = Curl::Easy.new
+      easy.url = self.uri + "/namespaces/" + easy.escape(prefix)
+      easy.http_get
+      ns = easy.body_str
+      ns =~ /^Undefined prefix:/ ? nil : ns
+    end
+
+    # Sets the given prefix to the given namespace.
+    def namespace!(prefix, namespace)
+      uri = URI.parse(self.uri + "/namespaces/" + URI.escape(prefix))
+      http = Net::HTTP.start(uri.host, uri.port)
+      http.send_request('PUT', uri.path, namespace).body
+    end
+
+    # Deletes the namespace with the given prefix.
+    def delete_namespace!(prefix)
+      uri = URI.parse(self.uri + "/namespaces/" + URI.escape(prefix))
+      http = Net::HTTP.start(uri.host, uri.port)
+      http.delete(uri.path)
+    end
+
+    # Deletes all namespaces in the repository.
+    def delete_all_namespaces!
+      uri = URI.parse(self.uri + "/namespaces")
+      http = Net::HTTP.start(uri.host, uri.port)
+      http.delete(uri.path)
+    end
+
+
+    # Adds new data to the repository.  The data can be an RDF document or a
+    # "special purpose transaction document". I don't know what the
+    # latter is.
+    def add!(data, data_format=DATA_TYPES[:Turtle])
+      easy = Curl::Easy.new
+      easy.headers["Content-Type"] = data_format
+
+      easy.url = self.uri + "/statements"
+      easy.http_post(data)
+    end # add
+
+
+    # Returns the number of statements in the repository.
+    def size
+      easy = Curl::Easy.new
+      easy.url = self.uri + "/size"
+      easy.http_get
+      easy.body_str.to_i
+    end
+
+
+    # Convert the given hash into an array of strings for a POST.
+    def self.post_parameterize(hash)
+      easy = Curl::Easy.new
+      hash.keys.map{|key|
+        easy.escape(key.to_s) + "=" + easy.escape(hash[key])
+      }
+    end
+
+    # Convert the given hash into a URL paramter string for a GET.
+    def self.get_parameterize(hash)
+     post_parameterize(hash).join("&")
+    end
+
 
   end # class Repository
 end
