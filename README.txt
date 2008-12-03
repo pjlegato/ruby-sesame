@@ -1,5 +1,12 @@
-Ruby-Sesame: a Ruby library to interact with OpenRDF.org's Sesame RDF
-framework via its REST interface.
+== ruby-sesame
+A  Ruby library to interact with OpenRDF.org's Sesame RDF framework via its REST interface.
+
+== Authors
+
+Paul Legato (pjlegato at gmail dot com)
+
+
+== LICENSE:
 
 Copyright (C) 2008 Paul Legato (pjlegato at gmail dot com).
 

@@ -26,6 +26,9 @@ require 'net/http'
 require 'uri'
 
 module RubySesame
+
+  Version = "0.1"
+
   ## MIME types for result format to be sent by server.
   DATA_TYPES = {
     ## MIME types for variable binding formats
