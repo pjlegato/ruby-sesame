@@ -1,6 +1,10 @@
 == ruby-sesame
 A  Ruby library to interact with OpenRDF.org's Sesame RDF framework via its REST interface.
 
+* My email: pjlegato at gmail dot com
+* Git repository: http://github.com/pjlegato/ruby-sesame/
+* Rubyforge homepage: http://rubyforge.org/projects/ruby-sesame/
+
 == Authors
 
 Paul Legato (pjlegato at gmail dot com)
