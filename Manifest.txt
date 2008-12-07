@@ -1,0 +1,10 @@
+COPYING
+History.txt
+Manifest.txt
+README.txt
+Rakefile
+lib/ruby-sesame.rb
+spec/live_spec.rb
+spec/shared_ruby_sesame_spec.rb
+spec/spec.opts
+spec/spec_helper.rb

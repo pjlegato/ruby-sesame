@@ -9,6 +9,7 @@ Hoe.new('ruby-sesame', RubySesame::Version) do |p|
   p.summary = 'A Ruby interface to OpenRDF.org\'s Sesame RDF triple store'
   p.email = 'pjlegato at gmail dot com'
   p.url = 'http://ruby-sesame.rubyforge.org'
+  p.remote_rdoc_dir = '' # Release to root
 end
 
 
