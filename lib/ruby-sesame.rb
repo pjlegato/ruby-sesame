@@ -27,7 +27,7 @@ require 'uri'
 
 module RubySesame
 
-  Version = "0.1"
+  Version = "0.1.0"
 
   ## MIME types for result format to be sent by server.
   DATA_TYPES = {
