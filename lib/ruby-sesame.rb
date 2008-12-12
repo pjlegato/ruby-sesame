@@ -50,8 +50,18 @@ module RubySesame
   }
 
 
+  class SesameException < Exception
+  end
+
   class Server
-    attr_reader :url, :repositories
+    attr_reader :url, :repositories, :logger
+
+
+    # Silently eats any messages sent to it.
+    class NullLogger
+      def method_missing(*args)
+      end
+    end
 
     #
     # Initialize a Server object at the given URL.  Sesame uses a
@@ -60,15 +70,21 @@ module RubySesame
     # the protocol version and repositories available on the server if
     # it is.
     #
-    def initialize(url, query_server_information=false)
+    # If logger is given, it should respond to #debug, #info, #warn, and #error, and do
+    # something appropriate with that information.
+    #
+    def initialize(url, query_server_information=false, logger=NullLogger.new)
       url = url + "/" unless url[-1..-1] == "/"
       @url = url
+      @logger = logger
 
       if query_server_information
         query_version
+        query_repositories
       end
-    end # initialize
 
+      logger.debug("Ruby-sesame initialized; connected to #{ url }")
+    end # initialize
 
     def query_version
       @protocol_version = Curl::Easy.http_get(@url + "protocol").body_str.to_i
@@ -109,6 +125,11 @@ module RubySesame
       @readable = attrs["readable"]["value"] == "true"
     end
 
+    def logger
+      @server.logger
+    end
+
+
     #
     # The valid result_types depend on what type of query you're
     # doing: "Relevant values are the MIME types of supported RDF
@@ -125,8 +146,9 @@ module RubySesame
     # * :variable_bindings - if given, should be a Hash. If present, it will
     #    be used to bind variables outside the actual query. Keys are
     #    variable names and values are N-Triples encoded RDF values.
-
     def query(query, options={})
+      logger.debug("Ruby-Sesame querying:\n#{ query }\n\nOptions: #{ options.pretty_inspect }")
+
       options = {
         :result_type => DATA_TYPES[:JSON],
         :method => :get,
@@ -169,6 +191,8 @@ module RubySesame
         easy.http_post(fields)
       end
 
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 200
+
       easy.body_str
     end # query
 
@@ -210,7 +234,9 @@ module RubySesame
       easy.url = url
       easy.http_get
 
-       easy.body_str
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 200
+
+      easy.body_str
     end # get_statements
 
     # Delete one or more statements from the repository. Takes the same arguments as get_statements.
@@ -231,6 +257,7 @@ module RubySesame
                                                                               }))
       http = Net::HTTP.start(uri.host, uri.port)
       http.delete(uri.path)
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 204
     end # delete_statements!
 
     # Convenience method; deletes all data from the repository.
@@ -246,6 +273,9 @@ module RubySesame
 
       easy.url = self.uri + "/contexts"
       easy.http_get
+
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 200
+
       easy.body_str
     end
 
@@ -340,7 +370,6 @@ module RubySesame
     def self.get_parameterize(hash)
      post_parameterize(hash).join("&")
     end
-
 
   end # class Repository
 end
