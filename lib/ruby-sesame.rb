@@ -292,6 +292,9 @@ module RubySesame
 
       easy.url = self.uri + "/namespaces"
       easy.http_get
+
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 200
+
       easy.body_str
     end
 
@@ -311,6 +314,9 @@ module RubySesame
       easy = Curl::Easy.new
       easy.url = self.uri + "/namespaces/" + easy.escape(prefix)
       easy.http_get
+
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 200
+
       ns = easy.body_str
       ns =~ /^Undefined prefix:/ ? nil : ns
     end
@@ -319,7 +325,11 @@ module RubySesame
     def namespace!(prefix, namespace)
       uri = URI.parse(self.uri + "/namespaces/" + URI.escape(prefix))
       http = Net::HTTP.start(uri.host, uri.port)
-      http.send_request('PUT', uri.path, namespace).body
+      result = http.send_request('PUT', uri.path, namespace)
+
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 204
+
+      result.body
     end
 
     # Deletes the namespace with the given prefix.
@@ -327,6 +337,7 @@ module RubySesame
       uri = URI.parse(self.uri + "/namespaces/" + URI.escape(prefix))
       http = Net::HTTP.start(uri.host, uri.port)
       http.delete(uri.path)
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 204
     end
 
     # Deletes all namespaces in the repository.
@@ -334,6 +345,7 @@ module RubySesame
       uri = URI.parse(self.uri + "/namespaces")
       http = Net::HTTP.start(uri.host, uri.port)
       http.delete(uri.path)
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 204
     end
 
 
@@ -346,6 +358,7 @@ module RubySesame
 
       easy.url = self.uri + "/statements"
       easy.http_post(data)
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 204
     end # add
 
 
@@ -354,6 +367,9 @@ module RubySesame
       easy = Curl::Easy.new
       easy.url = self.uri + "/size"
       easy.http_get
+
+      raise(SesameException.new(easy.body_str)) unless easy.response_code == 200
+
       easy.body_str.to_i
     end
 
